@@ -1,21 +1,27 @@
-# !/usr/bin/python
+#!/usr/bin/env python
 
 import os
 import sys
 import argparse
 import hashlib
+import timeit
+from tqdm import *
 from multiprocessing.dummy import Pool
+from multiprocessing import cpu_count
 
 def hash(path):
 	try:
+                #print "Hashing " + path
 		with open(path, 'rb') as f:
 			hasher = hashlib.sha256()
-			hasher.update(f.read())
+                        for chunk in iter(lambda:f.read(8192), b''):
+			    hasher.update(chunk)
 		with open('hashes.txt', 'a') as w:
 			w.write(hasher.hexdigest()+'\t'+path+'\n')
+                #print "Hashed " + path
 	except:
 		if verbosity == 1:
-			print "Couldn't hash file: " + path + "\n It was probably a broken symlink"
+			print "Couldn't hash file: " + path
 		else:
 			pass
 
@@ -27,14 +33,26 @@ def get_paths(path):
 	return paths
 
 def syshash(path):
+        print "Reading filesystem..."
+
 	paths = get_paths(path)	
+
+        print "Found " + str(len(paths)) + " files"
+        print "Hashing the files now..."
 	
-	pool = Pool()
-	pool.map(hash, paths)
-	pool.close()
-	pool.join()
+        t0 = timeit.default_timer()
+
+        p = Pool(cpu_count()) 
+        with tqdm(len(paths)) as pbar:
+	    for i, _ in tqdm(enumerate(p.imap(hash, paths))):
+                pbar.update()
+	p.close()
+	p.join()
+
+        t1 = timeit.default_timer()
 	
-	print "Done! Hashed " + str(len(paths)) + " files."
+	print "Done! Hashed " + str(len(paths)) + " files in " + str(t1-t0) + "s"
+        print "Hashes have been written to hashes.txt"
 
 if __name__ == "__main__":
 
